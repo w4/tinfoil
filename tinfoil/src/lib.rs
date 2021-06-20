@@ -2,12 +2,12 @@
 
 pub mod internals;
 
+pub use tinfoil_macros::{Tinfoil, TinfoilContext};
+
 use std::any::TypeId;
 
-pub trait Dependency<'a, C> {
+pub trait Dependency {
     const DEPENDENCIES: &'static [TypeId];
-
-    fn instn(context: &'a C) -> Self;
 }
 
 ///////////////////

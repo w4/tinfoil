@@ -30,26 +30,31 @@ pub fn tinfoil(input: proc_macro::TokenStream) -> Result<proc_macro::TokenStream
     let input: DeriveInput = syn::parse(input).map_err(|e| e.to_compile_error())?;
 
     let name = &input.ident;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     let s = match input.data {
         Data::Struct(v) => v,
         _ => panic!("not a struct"),
     };
+    let typ = s.fields.iter().map(|v| &v.ty);
     let types = s
         .fields
         .iter()
         .map(|v| replace_lifetimes_with_static(&v.ty));
     let fields = s.fields.iter().map(|v| &v.ident);
 
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    // TODO: support generics from #ty_generics
     let expanded = quote! {
         #[allow(missing_docs, single_use_lifetimes)]
-        impl #impl_generics Dependency<'a, InjectionContext<'a>> for #name #ty_generics #where_clause {
+        impl #impl_generics tinfoil::Dependency for #name #ty_generics #where_clause {
             const DEPENDENCIES: &'static [std::any::TypeId] = &[
                 #(std::any::TypeId::of::<#types>()),*
             ];
+        }
 
-            fn instn(context: &'a InjectionContext<'a>) -> Self {
+        impl #impl_generics #name #ty_generics #where_clause {
+            pub fn instn<C: 'a + #(tinfoil::Provider<'a, #typ>)+*>(context: &'a C) -> Self {
                 Self {
                     #(#fields: context.get()),*
                 }
@@ -138,20 +143,21 @@ pub fn tinfoil_context(input: proc_macro::TokenStream) -> Result<proc_macro::Tok
     let expanded = quote! {
         impl #impl_generics #name #ty_generics #where_clause {
             pub fn new(#(#parameters: #parameter_types),*) -> Pin<Box<Self>> {
-                let mut context = Box::pin(InjectionContext {
+                let mut context = Box::pin(Self {
                     #(#parameters,)*
                     #(#defaults: Default::default(),)*
                     #(#instantiate_from_ctx: MaybeUninit::uninit(),)*
                     _pin: PhantomPinned,
                 });
 
+                /// TODO: this needs to be compile time checked
                 let mut dag: tinfoil::internals::Dag<i32, i32, usize> = tinfoil::internals::Dag::new();
                 let initial = dag.add_node(0);
                 let mut nodes = std::collections::HashMap::new();
                 // TODO: fix generics & run through `replace_lifetimes_with_static`
                 #(nodes.insert(std::any::TypeId::of::<&'static #instantiate_from_ctx_types<'static>>(), {
                     let node = dag.add_node(0);
-                    dag.add_edge(initial, node, 0);
+                    dag.add_edge(initial, node, 0).unwrap();
                     node
                 });)*
 
@@ -180,13 +186,13 @@ pub fn tinfoil_context(input: proc_macro::TokenStream) -> Result<proc_macro::Tok
                     if false {}
                     #(else if ty == std::any::TypeId::of::<&'static #instantiate_from_ctx_types<'static>>() {
                         // this is safe because we know MyCoolValue is initialised and will be for the lifetime of
-                        // InjectionContext
+                        // Self
                         let value = MaybeUninit::new(#instantiate_from_ctx_types::instn(context.as_ref().get_ref()));
 
                         // this is safe because we don't move any values
                         unsafe {
-                            // let mut_ref: Pin<&mut InjectionContext> = Pin::as_mut(&mut context);
-                            let mut_ref: Pin<&mut InjectionContext> = std::mem::transmute(context.as_ref());
+                            // let mut_ref: Pin<&mut Self> = Pin::as_mut(&mut context);
+                            let mut_ref: Pin<&mut #name> = std::mem::transmute(context.as_ref());
                             Pin::get_unchecked_mut(mut_ref).#instantiate_from_ctx = value;
                         }
                     })*

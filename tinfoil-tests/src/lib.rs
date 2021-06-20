@@ -4,7 +4,6 @@
 use std::marker::PhantomPinned;
 use std::mem::MaybeUninit;
 use std::pin::Pin;
-use std::ptr::NonNull;
 use tinfoil::{Dependency, Provider};
 use tinfoil_macros::{Tinfoil, TinfoilContext};
 
@@ -26,6 +25,7 @@ pub struct CoolDependency<'a> {
 #[derive(Tinfoil)]
 pub struct OtherDependency<'a> {
     pub cool_dep: &'a CoolDependency<'a>,
+    pub cool_value: &'a MyCoolValue,
 }
 
 #[derive(TinfoilContext)]

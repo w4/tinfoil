@@ -3,9 +3,11 @@ name = "tinfoil"
 version = "0.0.1"
 authors = ["Jordan Doyle <jordan@doyle.la>"]
 edition = "2018"
+description = ""
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 daggy = "0.7"
 petgraph = "0.5"
+tinfoil-macros = { path = "../tinfoil-macros" }
