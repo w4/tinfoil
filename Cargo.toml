@@ -1,0 +1,2 @@
+[workspace]
+members = ["tinfoil", "tinfoil-macros", "tinfoil-tests"]
